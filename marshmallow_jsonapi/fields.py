@@ -174,7 +174,8 @@ class Relationship(BaseRelationship):
         # relationship. Unserialize it if we have a schema set; otherwise we
         # fall back below to old behaviour of only IDs.
         if 'attributes' in data and self.__schema:
-            return self.schema.load({'data': data}).data
+            result = self.schema.load({'data': data})
+            return result.data if _MARSHMALLOW_VERSION_INFO[0] < 3 else result
 
         return data.get('id')
 
@@ -229,9 +230,13 @@ class Relationship(BaseRelationship):
 
     def _serialize_included(self, value):
         result = self.schema.dump(value)
-        if result.errors:
-            raise ValidationError(result.errors)
-        item = result.data['data']
+
+        if _MARSHMALLOW_VERSION_INFO[0] < 3:
+            data = result.data
+        else:
+            data = result
+
+        item = data['data']
         self.root.included_data[(item['type'], item['id'])] = item
         for key, value in iteritems(self.schema.included_data):
             self.root.included_data[key] = value
@@ -273,7 +278,10 @@ class Meta(Field):
 
     def __init__(self, **kwargs):
         super(Meta, self).__init__(**kwargs)
-        self.load_from = _META_LOAD_FROM
+        if _MARSHMALLOW_VERSION_INFO[0] < 3:
+            self.load_from = _META_LOAD_FROM
+        else:
+            self.data_key = _META_LOAD_FROM
 
     def _deserialize(self, value, attr, data):
         if isinstance(value, collections.Mapping):
